@@ -11,10 +11,17 @@ const {
     removeFriend,
 } = require('../../controllers/user-controller');
 
-// Set up GET all and POST at /api/users
+// Get all users. Create new user
 router
     .route('/')
     .get(getAllUsers)
     .post(createUser);
+
+// Get one user by id. Update or delete user
+router
+    .route('/:id')
+    .get(getUserById)
+    .put(updateUser)
+    .delete(deleteUser);
 
 module.exports = router;
