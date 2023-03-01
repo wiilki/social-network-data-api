@@ -12,14 +12,12 @@ const {
 } = require('../../controllers/user-controller');
 
 // Get all users. Create new user
-router
-    .route('/')
+router.route('/')
     .get(getAllUsers)
     .post(createUser);
 
 // Get one user by id. Update or delete user
-router
-    .route('/:id')
+router.route('/:id')
     .get(getUserById)
     .put(updateUser)
     .delete(deleteUser);
