@@ -1,5 +1,6 @@
 const express = require('express');
 const mongoose = require('mongoose');
+
 const routes = require('./routes');
 
 const app = express();
@@ -7,14 +8,22 @@ const PORT = process.env.PORT || 3001;
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Serve up static assets
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static('client/build'));
+}
+
+// Add routes
 app.use(routes);
 
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost/social-media-api', {
-  useFindAndModify: false,
+// Connect to the Mongo DB
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost/social-network-api', {
   useNewUrlParser: true,
   useUnifiedTopology: true
 });
 
-mongoose.set('debug', true);
-
-app.listen(PORT, () => console.log(`Connected on localhost:${PORT}`));
+// Start the API server
+app.listen(PORT, () => {
+  console.log(`API server now listening on port ${PORT}!`);
+});
