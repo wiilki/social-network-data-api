@@ -17,9 +17,14 @@ router.route('/')
     .post(createUser);
 
 // Get one user by id. Update or delete user
-router.route('/:id')
+router.route('/:userId')
     .get(getUserById)
     .put(updateUser)
     .delete(deleteUser);
+
+// Add or remove a friend to/from a user's friend list
+router.route('/:userId/friends/:friendId')
+    .post(addFriend)
+    .delete(removeFriend);
 
 module.exports = router;
