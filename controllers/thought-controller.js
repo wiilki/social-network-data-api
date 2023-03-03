@@ -49,6 +49,7 @@ const createThought = async (req, res) => {
     }
 };
 
+
 const updateThought = async (req, res) => {
     try {
         const thought = await Thought.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
