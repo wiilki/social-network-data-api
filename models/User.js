@@ -50,9 +50,10 @@ userSchema.pre('findOneAndUpdate', async function (next) {
 });
 
 userSchema.pre('remove', async function (next) {
-  await Thought.deleteMany({ username: this.username });
+  await Thought.deleteMany({ _id: { $in: this.thoughts } });
   next();
 });
+
 
 const User = model('User', userSchema);
 
