@@ -13,4 +13,40 @@ const getAllThoughts = async (req, res) => {
     }
 };
 
+const getThoughtById = async (req, res) => {
+    try {
+        const thought = await Thought.findById(req.params.id).populate({
+            path: 'reactions',
+            select: '-__v'
+        }).select('-__v');
+        if (!thought) {
+            res.status(404).json({ message: 'No thought found with this id!' });
+            return;
+        }
+        res.json(thought);
+    } catch (err) {
+        console.log(err);
+        res.status(400).json(err);
+    }
+};
+
+const createThought = async (req, res) => {
+    try {
+        const thought = await Thought.create(req.body);
+        const user = await User.findByIdAndUpdate(
+            req.body.userId,
+            { $push: { thoughts: thought._id } },
+            { new: true }
+        );
+        if (!user) {
+            res.status(404).json({ message: 'No user found with this id!' });
+            return;
+        }
+        res.json(thought);
+    } catch (err) {
+        console.log(err);
+        res.status(400).json(err);
+    }
+};
+
 
