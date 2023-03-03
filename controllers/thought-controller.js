@@ -49,4 +49,36 @@ const createThought = async (req, res) => {
     }
 };
 
+const updateThought = async (req, res) => {
+    try {
+        const thought = await Thought.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+        if (!thought) {
+            res.status(404).json({ message: 'No thought found with this id!' });
+            return;
+        }
+        res.json(thought);
+    } catch (err) {
+        console.log(err);
+        res.status(400).json(err);
+    }
+};
+
+const deleteThought = async (req, res) => {
+    try {
+        const thought = await Thought.findByIdAndDelete(req.params.id);
+        if (!thought) {
+            res.status(404).json({ message: 'No thought found with this id!' });
+            return;
+        }
+        await User.findByIdAndUpdate(
+            thought.userId,
+            { $pull: { thoughts: thought._id } }
+        );
+        res.json(thought);
+    } catch (err) {
+        console.log(err);
+        res.status(400).json(err);
+    }
+};
+
 
