@@ -71,16 +71,22 @@ const deleteThought = async (req, res) => {
             res.status(404).json({ message: 'No thought found with this id!' });
             return;
         }
-        await User.findByIdAndUpdate(
-            thought.userId,
-            { $pull: { thoughts: thought._id } }
-        );
+
+        // Check if user is defined before accessing its properties
+        if (thought.userId) {
+            await User.findByIdAndUpdate(
+                thought.userId,
+                { $pull: { thoughts: thought._id } }
+            );
+        }
+        
         res.json(thought);
     } catch (err) {
         console.log(err);
         res.status(400).json(err);
     }
 };
+
 
 const addReaction = async (req, res) => {
     try {
