@@ -17,7 +17,7 @@ router.route('/')
     .post(createUser);
 
 // Get one user by id. Update or delete user
-router.route('/:userId')
+router.route('/:id')
     .get(getUserById)
     .put(updateUser)
     .delete(deleteUser);
