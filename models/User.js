@@ -1,60 +1,14 @@
 const { Schema, model } = require('mongoose');
-const Thought = require('./Thought');
-const dateFormat = require('../utils/dateFormat');
 
-const userSchema = new Schema(
-  {
-    username: {
-      type: String,
-      unique: true,
-      required: true,
-      trim: true
-    },
-    email: {
-      type: String,
-      required: true,
-      unique: true,
-      match: [/.+@.+\..+/, 'Please enter a valid email address']
-    },
-    thoughts: [
-      {
-        type: Schema.Types.ObjectId,
-        ref: 'Thought'
-      }
-    ],
-    friends: [
-      {
-        type: Schema.Types.ObjectId,
-        ref: 'User'
-      }
-    ]
-  },
-  {
-    toJSON: {
-      virtuals: true,
-      getters: true
-    },
-    id: false
-  }
-);
-
-userSchema.virtual('friendCount').get(function () {
-  return this.friends.length;
+const userSchema = new Schema({
+  username: { type: String, required: true, unique: true, trim: true, minlength: 3, maxlength: 24, match: /^[a-zA-Z0-9_]+$/ },
+  email: { type: String, required: true, unique: true, lowercase: true, trim: true, maxlength: 254, select: false, match: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ },
+  thoughts: [{ type: Schema.Types.ObjectId, ref: 'Thought' }],
+  friends: [{ type: Schema.Types.ObjectId, ref: 'User' }]
+}, {
+  timestamps: true,
+  toJSON: { virtuals: true, transform(doc, ret) { delete ret.email; delete ret.__v; return ret; } }
 });
-
-userSchema.pre('findOneAndUpdate', async function (next) {
-  const updatedUser = await this.model.findOne(this.getFilter());
-  updatedUser.friendCount = updatedUser.friends.length;
-  await updatedUser.save();
-  next();
-});
-
-userSchema.pre('remove', async function (next) {
-  await Thought.deleteMany({ _id: { $in: this.thoughts } });
-  next();
-});
-
-
-const User = model('User', userSchema);
-
-module.exports = User;
+userSchema.virtual('friendCount').get(function () { return this.friends.length; });
+userSchema.virtual('thoughtCount').get(function () { return this.thoughts.length; });
+module.exports = model('User', userSchema);

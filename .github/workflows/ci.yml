@@ -1,0 +1,41 @@
+name: Test API
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+    env:
+      TEST_MONGODB_URI: mongodb://127.0.0.1:27017/social-network-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Check JavaScript syntax
+        run: |
+          find . -path ./node_modules -prune -o -name '*.js' -print | while read file; do
+            node --check "$file" || exit 1
+          done
+      - name: Wait for MongoDB
+        run: |
+          for i in {1..25}; do
+            if (echo > /dev/tcp/127.0.0.1/27017) 2>/dev/null; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Run tests
+        run: npm test
