@@ -1,121 +1,69 @@
-const { User } = require('../models');
+const { User, Thought } = require('../models');
+const { HttpError, asyncRoute } = require('../utils/errors');
+const { objectId, userCreate, userUpdate, pagination, escapeRegex, pageResult, publicUser } = require('../utils/validation');
 
-const getAllUsers = async (req, res) => {
-  try {
-    const users = await User.find().populate({
-      path: 'thoughts',
-      select: '-__v'
-    }).populate({
-      path: 'friends',
-      select: '-__v'
-    }).select('-__v');
-    res.json(users);
-  } catch (err) {
-    console.log(err);
-    res.status(400).json(err);
-  }
-};
+const withDetails = (query) => query
+  .populate({ path: 'friends', select: 'username createdAt' })
+  .populate({ path: 'thoughts', select: 'username thoughtText createdAt' });
 
-const getUserById = async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id).populate({
-      path: 'thoughts',
-      select: '-__v'
-    }).populate({
-      path: 'friends',
-      select: '-__v'
-    }).select('-__v');
-    if (!user) {
-      res.status(404).json({ message: 'No user found with this id!' });
-      return;
-    }
-    res.json(user);
-  } catch (err) {
-    console.log(err);
-    res.status(400).json(err);
-  }
-};
+const getAllUsers = asyncRoute(async (req, res) => {
+  const options = pagination(req.query);
+  const filter = options.q ? { username: { $regex: escapeRegex(options.q), $options: 'i' } } : {};
+  const [users, total] = await Promise.all([
+    withDetails(User.find(filter).select('-__v').sort({ createdAt: -1, _id: -1 })
+      .skip(options.skip).limit(options.limit)).lean(),
+    User.countDocuments(filter)
+  ]);
+  res.json(pageResult(users.map(publicUser), total, options));
+});
 
-const createUser = async (req, res) => {
-  try {
-    const user = await User.create(req.body);
-    res.json(user);
-  } catch (err) {
-    console.log(err);
-    res.status(400).json(err);
-  }
-};
+const getUserById = asyncRoute(async (req, res) => {
+  objectId(req.params.id);
+  const user = await withDetails(User.findById(req.params.id).select('-__v')).lean();
+  if (!user) throw new HttpError(404, 'User not found');
+  res.json(publicUser(user));
+});
 
-const updateUser = async (req, res) => {
-  try {
-    const user = await User.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
-    if (!user) {
-      res.status(404).json({ message: 'No user found with this id!' });
-      return;
-    }
-    res.json(user);
-  } catch (err) {
-    console.log(err);
-    res.status(400).json(err);
-  }
-};
+const createUser = asyncRoute(async (req, res) => {
+  const user = await User.create(userCreate(req.body));
+  res.status(201).json(publicUser(user));
+});
 
-const deleteUser = async (req, res) => {
-  try {
-    const user = await User.findByIdAndDelete(req.params.id);
-    if (!user) {
-      res.status(404).json({ message: 'No user found with this id!' });
-      return;
-    }
-    res.json(user);
-  } catch (err) {
-    console.log(err);
-    res.status(400).json(err);
-  }
-};
+const updateUser = asyncRoute(async (req, res) => {
+  objectId(req.params.id);
+  const user = await User.findByIdAndUpdate(req.params.id, { $set: userUpdate(req.body) }, { new: true, runValidators: true });
+  if (!user) throw new HttpError(404, 'User not found');
+  res.json(publicUser(user));
+});
 
-const addFriend = async (req, res) => {
-  try {
-    const updatedUser = await User.findOneAndUpdate(
-      { _id: req.params.userId },
-      { $addToSet: { friends: req.params.friendId } },
-      { new: true }
-    );
-    if (!updatedUser) {
-      res.status(404).json({ message: 'No user found with this id!' });
-      return;
-    }
-    res.json(updatedUser);
-  } catch (err) {
-    console.log(err);
-    res.status(400).json(err);
-  }
-};
+const deleteUser = asyncRoute(async (req, res) => {
+  objectId(req.params.id);
+  const user = await User.findById(req.params.id);
+  if (!user) throw new HttpError(404, 'User not found');
+  // Username remains immutable so authored posts are unambiguous.
+  const thoughtIds = (await Thought.find({ username: user.username }).select('_id').lean()).map((thought) => thought._id);
+  await Thought.deleteMany({ username: user.username });
+  await User.updateMany({}, { $pull: { friends: user._id, thoughts: { $in: thoughtIds } } });
+  await User.deleteOne({ _id: user._id });
+  res.json({ message: 'User and authored thoughts deleted', deletedId: user.id });
+});
 
-const removeFriend = async (req, res) => {
-  try {
-    const updatedUser = await User.findOneAndUpdate(
-      { _id: req.params.userId },
-      { $pull: { friends: req.params.friendId } },
-      { new: true }
-    );
-    if (!updatedUser) {
-      res.status(404).json({ message: 'No user found with this id!' });
-      return;
-    }
-    res.json(updatedUser);
-  } catch (err) {
-    console.log(err);
-    res.status(400).json(err);
-  }
-};
+const addFriend = asyncRoute(async (req, res) => {
+  const userId = objectId(req.params.userId, 'userId');
+  const friendId = objectId(req.params.friendId, 'friendId');
+  if (userId === friendId) throw new HttpError(422, 'Users cannot add themselves');
+  if (!await User.exists({ _id: friendId })) throw new HttpError(404, 'Friend not found');
+  const user = await User.findByIdAndUpdate(userId, { $addToSet: { friends: friendId } }, { new: true, runValidators: true });
+  if (!user) throw new HttpError(404, 'User not found');
+  res.json(publicUser(user));
+});
 
-module.exports = {
-  getAllUsers,
-  getUserById,
-  createUser,
-  updateUser,
-  deleteUser,
-  addFriend,
-  removeFriend
-};
+const removeFriend = asyncRoute(async (req, res) => {
+  const userId = objectId(req.params.userId, 'userId');
+  const friendId = objectId(req.params.friendId, 'friendId');
+  const user = await User.findByIdAndUpdate(userId, { $pull: { friends: friendId } }, { new: true });
+  if (!user) throw new HttpError(404, 'User not found');
+  res.json(publicUser(user));
+});
+
+module.exports = { getAllUsers, getUserById, createUser, updateUser, deleteUser, addFriend, removeFriend };

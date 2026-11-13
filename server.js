@@ -1,29 +1,36 @@
-const express = require('express');
 const mongoose = require('mongoose');
+const app = require('./app');
+const { connectDatabase } = require('./config/connection');
+const port = Number(process.env.PORT || 3001);
 
-const routes = require('./routes');
-
-const app = express();
-const PORT = process.env.PORT || 3001;
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// Serve up static assets
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static('client/build'));
+async function start() {
+  if (process.env.NODE_ENV === 'production' && !process.env.API_WRITE_KEY) {
+    throw new Error('Set API_WRITE_KEY before running in production');
+  }
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error('PORT must be an integer between 1 and 65535');
+  }
+  await connectDatabase();
+  const server = app.listen(port, () => {
+    console.log('Social Network Studio listening on http://localhost:' + port);
+  });
+  let closing = false;
+  const shutdown = () => {
+    if (closing) return;
+    closing = true;
+    server.close(async (error) => {
+      try { await mongoose.disconnect(); }
+      finally { process.exitCode = error ? 1 : 0; }
+    });
+  };
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+  return server;
 }
-
-// Add routes
-app.use(routes);
-
-// Connect to the Mongo DB
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost/social-network-api', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-});
-
-// Start the API server
-app.listen(PORT, () => {
-  console.log(`API server now listening on port ${PORT}!`);
-});
+if (require.main === module) {
+  start().catch((error) => {
+    console.error('Unable to start the API:', error.message);
+    process.exitCode = 1;
+  });
+}
+module.exports = { start };
